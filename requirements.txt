@@ -16,7 +16,9 @@ alembic==1.12.1
 numpy==1.26.2
 pandas==2.1.3
 scikit-learn==1.3.2
-torch==2.1.1
+# Torch wheels differ by Python version; 2.1.1 lacks cp312 wheels needed on Vercel
+torch==2.1.1; python_version < "3.12"
+torch==2.2.2; python_version >= "3.12"
 transformers==4.35.2
 
 # Utilities
