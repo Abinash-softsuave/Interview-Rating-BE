@@ -26,25 +26,84 @@ from app.services.main_service import (
 from loguru import logger
 
 
-# Setup
-settings = get_settings()
-settings.SERVICE_NAME = "ai-service"
+# Setup - Lazy initialization to avoid errors during import
+_settings = None
+_logger_configured = False
 
-# Setup logging
-if not os.path.exists("logs"):
-    os.makedirs("logs", exist_ok=True)
+def _get_settings():
+    """Lazy load settings to avoid initialization errors during import"""
+    global _settings
+    if _settings is None:
+        try:
+            _settings = get_settings()
+            _settings.SERVICE_NAME = "ai-service"
+        except Exception as e:
+            logger.warning(f"Failed to load settings: {e}. Using defaults.")
+            # Create a minimal settings object if loading fails
+            from types import SimpleNamespace
+            _settings = SimpleNamespace(
+                SERVICE_NAME="ai-service",
+                GEMINI_API_KEY=os.getenv("GEMINI_API_KEY"),
+                WHISPER_MODEL=os.getenv("WHISPER_MODEL", "base"),
+                MAX_VIDEO_SIZE_MB=int(os.getenv("MAX_VIDEO_SIZE_MB", "5000")),
+                USE_ALTERNATIVE_TRANSCRIPTION=os.getenv("USE_ALTERNATIVE_TRANSCRIPTION", "True").lower() == "true",
+                TRANSCRIPTION_SERVICE=os.getenv("TRANSCRIPTION_SERVICE", "assemblyai"),
+                TRANSCRIPTION_API_KEY=os.getenv("TRANSCRIPTION_API_KEY"),
+                LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO")
+            )
+    return _settings
 
-logger.add(
-    f"logs/{settings.SERVICE_NAME}.log",
-    rotation="10 MB",
-    retention="7 days",
-    level=settings.LOG_LEVEL,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
-)
+def _configure_logger():
+    """Configure logger - lazy initialization to avoid errors during import"""
+    global _logger_configured
+    if _logger_configured:
+        return
+    
+    try:
+        settings = _get_settings()
+        
+        # Setup logging - serverless-friendly (no file system writes)
+        # In serverless environments like Vercel, we use console logging only
+        # Check if we're in a serverless environment
+        IS_SERVERLESS = os.getenv("VERCEL") is not None or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
+
+        if not IS_SERVERLESS:
+            # Only use file logging in non-serverless environments
+            try:
+                if not os.path.exists("logs"):
+                    os.makedirs("logs", exist_ok=True)
+                logger.add(
+                    f"logs/{settings.SERVICE_NAME}.log",
+                    rotation="10 MB",
+                    retention="7 days",
+                    level=settings.LOG_LEVEL,
+                    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+                )
+            except (OSError, PermissionError) as e:
+                # Fallback to console if file logging fails
+                logger.warning(f"File logging not available: {e}. Using console logging only.")
+        else:
+            # In serverless, configure console logging with proper format
+            import sys
+            logger.remove()  # Remove default handler
+            logger.add(
+                sys.stderr,  # Use stderr for serverless (Vercel captures this)
+                level=settings.LOG_LEVEL,
+                format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+            )
+        
+        _logger_configured = True
+    except Exception as e:
+        # If logger configuration fails, at least ensure we have basic logging
+        logger.warning(f"Logger configuration failed: {e}. Using default logger.")
+        _logger_configured = True
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
+    # Configure logger before creating app
+    _configure_logger()
+    
     app = FastAPI(
         title="AI Service",
         description="AI and Machine Learning service",
@@ -243,7 +302,7 @@ async def download_video_from_url(url: str, output_path: str, filename_hint: str
         # Download the video with proper headers
         logger.info(f"Downloading video from URL: {url}")
         # Increase timeout for large files - allow up to 10 minutes for download
-        max_size_mb = settings.MAX_VIDEO_SIZE_MB
+        max_size_mb = _get_settings().MAX_VIDEO_SIZE_MB
         # Calculate timeout based on file size limit (roughly 1 minute per 100MB with margin)
         timeout_seconds = max(300.0, (max_size_mb / 100) * 60)  # At least 5 minutes, more for larger limits
         timeout = httpx.Timeout(timeout_seconds, connect=30.0)
@@ -260,7 +319,7 @@ async def download_video_from_url(url: str, output_path: str, filename_hint: str
                 
                 if content_length:
                     file_size_mb = int(content_length) / (1024 * 1024)
-                    max_size_mb = settings.MAX_VIDEO_SIZE_MB
+                    max_size_mb = _get_settings().MAX_VIDEO_SIZE_MB
                     if file_size_mb > max_size_mb:
                         raise HTTPException(
                             status_code=400,
@@ -299,7 +358,7 @@ async def download_video_from_url(url: str, output_path: str, filename_hint: str
                 # Special handling for Google Drive - check if we got HTML (confirmation page)
                 if file_id and "text/html" in content_type:
                     logger.warning(f"Received HTML from Google Drive (confirmation page, attempt {retry_count + 1}/{MAX_RETRIES})")
-                    max_size_mb = settings.MAX_VIDEO_SIZE_MB  # Get size limit for error messages
+                    max_size_mb = _get_settings().MAX_VIDEO_SIZE_MB  # Get size limit for error messages
                     
                     # Read more HTML content to get the full page
                     # Google Drive confirmation pages can be large, read more to find download links
@@ -574,7 +633,7 @@ async def download_video_from_url(url: str, output_path: str, filename_hint: str
                 
                 # Download with progress tracking and validation
                 total_size = 0
-                max_size_mb = settings.MAX_VIDEO_SIZE_MB
+                max_size_mb = _get_settings().MAX_VIDEO_SIZE_MB
                 max_size_bytes = max_size_mb * 1024 * 1024
                 first_chunk_received = False
                 first_bytes = b""
@@ -700,6 +759,7 @@ def setup_routes(app: FastAPI):
             # Check file size
             file_content = await file.read()
             file_size_mb = len(file_content) / (1024 * 1024)
+            settings = _get_settings()
             max_size_mb = settings.MAX_VIDEO_SIZE_MB
             
             if file_size_mb > max_size_mb:
@@ -794,6 +854,7 @@ def setup_routes(app: FastAPI):
             logger.info(f"Processing video URL: {url}")
             
             # Check if Gemini API key is configured
+            settings = _get_settings()
             if not settings.GEMINI_API_KEY:
                 raise HTTPException(
                     status_code=500,

@@ -10,6 +10,12 @@ from typing import Optional
 # Find project root (where .env file is located)
 def find_project_root():
     """Find the project root directory by looking for .env file"""
+    # In serverless environments (Vercel, AWS Lambda), environment variables
+    # are provided directly, so we don't need to find .env files
+    if os.getenv("VERCEL") is not None or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None:
+        # Return a dummy path - pydantic-settings will use environment variables directly
+        return "/tmp"
+    
     current_dir = Path(__file__).resolve()
     # Go up from app/db/database.py -> app -> db -> project root
     project_root = current_dir.parent.parent.parent
@@ -64,7 +70,9 @@ class Settings(BaseSettings):
     TRANSCRIPTION_SERVICE: str = "assemblyai"  # Options: whisper, google, azure, assemblyai
     
     class Config:
-        env_file = os.path.join(find_project_root(), ".env")
+        # In serverless environments, don't use .env file - use environment variables directly
+        # pydantic-settings will automatically read from os.environ if env_file doesn't exist
+        env_file = None if (os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME")) else os.path.join(find_project_root(), ".env")
         env_file_encoding = "utf-8"
         case_sensitive = True
 
