@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - DEBUG=true
+      - SERVICE_NAME=ai-service
+    volumes:
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+      - ./services/ai-service:/app/services/ai-service

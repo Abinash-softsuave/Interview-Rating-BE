@@ -1,0 +1,32 @@
+✅ ALL THREE SERVICES ARE RUNNING!
+
+🌐 Service URLs:
+
+1. API Gateway: http://localhost:8000
+   - Documentation: http://localhost:8000/docs
+   - Health: http://localhost:8000/health
+
+2. AI Service: http://localhost:8001
+   - Documentation: http://localhost:8001/docs
+   - Health: http://localhost:8001/health
+
+3. User Service: http://localhost:8002
+   - Documentation: http://localhost:8002/docs
+   - Health: http://localhost:8002/health
+
+🚀 Quick Test Commands:
+
+# Test API Gateway routing
+curl http://localhost:8000/api/ai/health
+curl http://localhost:8000/api/users/health
+
+# Test AI Service directly
+curl http://localhost:8001/health
+curl -X POST http://localhost:8001/predict -H "Content-Type: application/json" -d '{"input_data": {"text": "Hello"}, "model_name": "default"}'
+
+# Test User Service directly
+curl http://localhost:8002/health
+curl -X POST http://localhost:8002/register -H "Content-Type: application/json" -d '{"email": "test@example.com", "username": "testuser", "password": "test123", "full_name": "Test User"}'
+
+All services are running with --reload flag, so they will automatically restart when you modify the code!
+
