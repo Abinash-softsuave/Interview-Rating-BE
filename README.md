@@ -120,13 +120,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Note:** Installing Whisper will download the model files on first use. The model size depends on the model you choose:
-
-- `tiny`: ~39 MB
-- `base`: ~74 MB (default, recommended)
-- `small`: ~244 MB
-- `medium`: ~769 MB
-- `large`: ~1550 MB
+**Note:** Whisper (local transcription) pulls large model files on first use. On serverless platforms like Vercel, prefer the API-based transcription options below to keep build size small.
 
 ### 4. Configure Environment Variables
 
@@ -136,7 +130,7 @@ Create a `.env` file in the project root:
 # Google Gemini API Key (Required)
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Whisper Model (tiny, base, small, medium, large)
+# Whisper Model (tiny, base, small, medium, large) - only if you install Whisper locally
 WHISPER_MODEL=base
 
 # Maximum video file size in MB
@@ -147,10 +141,10 @@ SERVICE_NAME=ai-service
 DEBUG=True
 LOG_LEVEL=INFO
 
-# Alternative Transcription (Optional)
-USE_ALTERNATIVE_TRANSCRIPTION=False
-TRANSCRIPTION_SERVICE=whisper
-TRANSCRIPTION_API_KEY=
+# Alternative Transcription (Recommended for serverless)
+USE_ALTERNATIVE_TRANSCRIPTION=True
+TRANSCRIPTION_SERVICE=assemblyai
+TRANSCRIPTION_API_KEY=your_assemblyai_api_key
 ```
 
 ## Running the Service
@@ -301,13 +295,14 @@ print(response.json())
 | medium | 769 MB  | Slow    | Very Good | High accuracy needed     |
 | large  | 1550 MB | Slowest | Best      | Maximum accuracy         |
 
-## Alternative Transcription Services
+## Alternative Transcription Services (serverless-friendly default)
 
-If Whisper is not available (e.g., Python 3.14+), you can configure alternative transcription services:
+For Vercel and other serverless platforms, use API-based transcription to avoid large local models:
 
 1. Set `USE_ALTERNATIVE_TRANSCRIPTION=True` in `.env`
-2. Choose a service: `TRANSCRIPTION_SERVICE=assemblyai` or `google`
+2. Choose a service: `TRANSCRIPTION_SERVICE=assemblyai` (recommended) or `google`
 3. Set the API key: `TRANSCRIPTION_API_KEY=your_api_key`
+4. Do **not** install `openai-whisper` unless you need local transcription on a VM
 
 ## Performance Notes
 

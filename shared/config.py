@@ -59,9 +59,9 @@ class Settings(BaseSettings):
     MAX_VIDEO_SIZE_MB: int = 5000  # Maximum video file size in MB
     
     # Alternative transcription (when Whisper not available)
-    USE_ALTERNATIVE_TRANSCRIPTION: bool = False  # Enable API-based transcription
+    USE_ALTERNATIVE_TRANSCRIPTION: bool = True  # Prefer API-based transcription on serverless
     TRANSCRIPTION_API_KEY: Optional[str] = None  # API key for alternative service
-    TRANSCRIPTION_SERVICE: str = "whisper"  # Options: whisper, google, azure, assemblyai
+    TRANSCRIPTION_SERVICE: str = "assemblyai"  # Options: whisper, google, azure, assemblyai
     
     class Config:
         env_file = os.path.join(find_project_root(), ".env")
